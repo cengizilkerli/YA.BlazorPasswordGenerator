@@ -1,0 +1,240 @@
+﻿@page "/"
+@using System.Text
+@inject NavigationManager Navigation
+@inject IToastService ToastService
+
+<PageTitle>Password Generator</PageTitle>
+
+<div class="container">
+    <div class="row justify-content-md-center">
+        <div class="card col-8">
+            <div class="card-header text-center">💾 Generate Password</div>
+            <div class="card-body">
+                <div class="input-group mb-3">
+                    <input @bind="password" readonly="readonly" type="text" class="form-control text-center">
+                    <div class="input-group-append">
+                        <button class="btn btn-outline-secondary" type="button" @onmouseenter="@(()=> OnEmojiHover("copy"))" @onmouseleave="@OnEmojiMouseLeave">📄</button>
+                        <button class="btn btn-outline-secondary" type="button" @onclick="HandleGeneratePasswordClick" @onmouseenter="@(()=> OnEmojiHover("generate"))" @onmouseleave="@OnEmojiMouseLeave">🔄</button>
+                        <button class="btn btn-outline-secondary" type="button" @onclick="HandleSavePasswordClick" @onmouseenter="@(()=> OnEmojiHover("save"))" @onmouseleave="@OnEmojiMouseLeave">💾</button>
+                    </div>
+                </div>
+
+                <div class="mb-3 text-center">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" id="inlineCheckbox1" @bind="@includeNumbers" @oninput="@((args)=>HandleCheckBoxOnChange(args, CheckBoxActionType.Numbers))">
+                        <label class="form-check-label" for="inlineCheckbox1">Numbers</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" id="inlineCheckbox2" @bind="@includeLowercase" @oninput="@((args)=>HandleCheckBoxOnChange(args, CheckBoxActionType.Lowercase))">
+                        <label class="form-check-label" for="inlineCheckbox2">LowerCase</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" id="inlineCheckbox3" @bind="@includeUppercase" @oninput="@((args)=>HandleCheckBoxOnChange(args, CheckBoxActionType.Uppercase))">
+                        <label class="form-check-label" for="inlineCheckbox3">UpperCase</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" id="inlineCheckbox4" @bind="@includeSpecialChars" @oninput="@((args)=>HandleCheckBoxOnChange(args, CheckBoxActionType.SpecialChars))">
+                        <label class="form-check-label" for="inlineCheckbox4">Special Chars</label>
+                    </div>
+                </div>
+
+                <div class="container mt-4">
+                    <h5 class="mb-3 text-center">Password Length</h5>
+                    <div class="row justify-content-center align-items-center">
+                        <div class="col-auto">
+                            <input @bind=@passwordLength type="number" class="form-control text-center" min="6" max="50" @oninput="HandlePasswordLengthInputOnChange" />
+                        </div>
+                        <div class="col-8">
+                            <input type="range" class="form-range" step="1" min="6" max="50" @bind="passwordLength" @oninput="HandleRangeOnChange" />
+                        </div>
+                        <div class="col-auto">
+                            <span class="badge badge-primary">@passwordLength characters</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row justify-content-md-center">
+            <div class="card col-8 mt-3">
+                <div class="card-header text-center">
+                    💾 Save Password
+                </div>
+                <div class="card-body">
+                    @if (savePasswords.Any())
+                    {
+                        <ul class="list-group">
+                            @foreach (string savePassword in savePasswords.Reverse())
+                            {
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>@savePassword</span>
+                                    <button @onclick="() => DeletePassword(savePassword)" class="btn btn-danger">
+                                        🗑 Delete
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <p class="text-center">No saved passwords found.</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string password = string.Empty;
+    private int passwordLength = 12;
+    private string onHoverCopyCss = string.Empty;
+    private string onHoverGenerateCss = string.Empty;
+    private string onHoverSaveCss = string.Empty;
+
+    private static Random random = new Random();
+    private static StringBuilder stringBuilder = new StringBuilder();
+    private HashSet<string> savePasswords = [];
+
+    private const string lowercaseLetters = "abcdefghijklmnopqrstuvwxyz";
+    private const string uppercaseLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private const string numbers = "0123456789";
+    private const string specialCharacters = "!@#$%&*()_+-={};:?";
+
+    private bool includeLowercase = true;
+    private bool includeUppercase = true;
+    private bool includeNumbers = true;
+    private bool includeSpecialChars = true;
+
+    private void OnEmojiHover(string iconType)
+    {
+        switch (iconType)
+        {
+            case "copy":
+                onHoverCopyCss = "bg-secondary";
+                break;
+            case "generate":
+                onHoverGenerateCss = "bg-secondary";
+                break;
+            case "save":
+                onHoverSaveCss = "bg-secondary";
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void OnEmojiMouseLeave()
+    {
+        onHoverCopyCss = string.Empty;
+        onHoverGenerateCss = string.Empty;
+        onHoverSaveCss = string.Empty;
+    }
+
+    private void HandleRangeOnChange(ChangeEventArgs args)
+    {
+        if (args.Value is null)
+            return;
+
+        passwordLength = Convert.ToInt32(args.Value);
+
+        GeneratePassword();
+    }
+
+    private void HandlePasswordLengthInputOnChange(ChangeEventArgs args)
+    {
+        if (args.Value is null)
+            return;
+
+        passwordLength = Convert.ToInt32(args.Value);
+
+        GeneratePassword();
+    }
+
+    private void HandleCheckBoxOnChange(ChangeEventArgs args, CheckBoxActionType actionType)
+    {
+        if (args.Value is null)
+            return;
+
+        var result = actionType switch
+        {
+            CheckBoxActionType.SpecialChars => includeSpecialChars = (bool)args.Value,
+            CheckBoxActionType.Numbers => includeNumbers = (bool)args.Value,
+            CheckBoxActionType.Uppercase => includeUppercase = (bool)args.Value,
+            CheckBoxActionType.Lowercase => includeLowercase = (bool)args.Value,
+            _ => throw new ArgumentException("Geçersiz CheckBoxActionType", nameof(actionType))
+        };
+
+        GeneratePassword();
+    }
+
+    private void HandleGeneratePasswordClick()
+    {
+        GeneratePassword();
+    }
+
+    private void DeletePassword(string selectedPassword)
+    {
+        if (savePasswords.Contains(selectedPassword))
+            savePasswords.Remove(selectedPassword);
+
+        ToastService.ShowInfo("Password deleted..");
+    }
+
+    private void GeneratePassword()
+    {
+        stringBuilder.Clear();
+
+        var validChars = new StringBuilder();
+
+        if (includeLowercase)
+            validChars.Append(lowercaseLetters);
+
+        if (includeUppercase)
+            validChars.Append(uppercaseLetters);
+
+        if (includeNumbers)
+            validChars.Append(numbers);
+
+        if (includeSpecialChars)
+            validChars.Append(specialCharacters);
+
+        if (!includeUppercase && !includeLowercase && !includeNumbers && !includeSpecialChars)
+        {
+            includeNumbers = true;
+            validChars.Append(numbers);
+        }
+
+        for (int i = 0; i <= passwordLength; i++)
+        {
+            var randomIndex = random.Next(0, validChars.Length);
+
+            stringBuilder.Append(validChars[randomIndex]);
+        }
+
+        password = stringBuilder.ToString();
+    }
+
+    private void HandleSavePasswordClick()
+    {
+        if (string.IsNullOrEmpty(password) || savePasswords.Any(x => x == password))
+            return;
+
+        savePasswords.Add(password);
+
+        ToastService.ShowInfo("The selected password saved !");
+    }
+
+    private void HandleSaveIconClick()
+    {
+        Navigation.NavigateTo("counter");
+    }
+
+    protected override void OnInitialized()
+    {
+        GeneratePassword();
+
+        base.OnInitialized();
+    }
+
+}
